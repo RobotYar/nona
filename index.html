@@ -333,20 +333,29 @@
                 console.log("Успешное подключение к LiveKit Cloud!");
                 addMessageToTimeline("Связь с облаком установлена!", "ai");
 
-                // 4. БРОНЕБОЙНАЯ ПУБЛИКАЦИЯ: Принудительно включаем и отправляем СВОЕ видео и звук в облако
-                // Браузер сам выберет стандартную камеру и микрофон
+                // 4. УЛЬТРА-БЕЗОПАСНАЯ ПУБЛИКАЦИЯ (Игнорирует ошибки отсутствия железа)
                 if (document.getElementById('btn-mic').classList.contains('active')) {
-                    await room.localParticipant.setMicrophoneEnabled(true);
-                    console.log("[+] Мой микрофон опубликован в облако");
+                    try {
+                        await room.localParticipant.setMicrophoneEnabled(true);
+                        console.log("[+] Мой микрофон опубликован");
+                    } catch(micError) {
+                        console.warn("[-] Микрофон не найден или занят другим приложением:", micError);
+                        addMessageToTimeline("Система: Микрофон не обнаружен, вход в режиме прослушивания.", "ai");
+                    }
                 }
+
                 if (document.getElementById('btn-cam').classList.contains('active')) {
-                    await room.localParticipant.setCameraEnabled(true);
-                    console.log("[+] Моя камера опубликована в облако");
-                    
-                    // Чтобы ты видел себя, пока в комнате никого нет (локальное превью):
-                    const localVideoTracks = Array.from(room.localParticipant.videoTracks.values());
-                    if (localVideoTracks.length > 0 && localVideoTracks[0].track) {
-                        localVideoTracks[0].track.attach(document.getElementById('video-background'));
+                    try {
+                        await room.localParticipant.setCameraEnabled(true);
+                        console.log("[+] Моя камера опубликована");
+                        
+                        const localVideoTracks = Array.from(room.localParticipant.videoTracks.values());
+                        if (localVideoTracks.length > 0 && localVideoTracks[0].track) {
+                            localVideoTracks[0].track.attach(document.getElementById('video-background'));
+                        }
+                    } catch(camError) {
+                        console.warn("[-] Камера не найдена:", camError);
+                        addMessageToTimeline("Система: Камера не обнаружена, вход без видеопотока.", "ai");
                     }
                 }
 

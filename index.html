@@ -345,7 +345,7 @@
                         const msg = JSON.parse(strData);
                         addMessageToTimeline(msg.text, msg.sender);
                         
-                        // Если панель чата закрыта — принудительно открываем её при ответе
+                        // Если панель чата скрыта — принудительно открываем её при ответе
                         const chat = document.getElementById('chat-overlay');
                         if (chat.style.display !== 'flex') {
                             toggleChat();

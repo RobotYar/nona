@@ -280,17 +280,74 @@
             startTimer();
         };
 
-        // --- Переходы между страницами ---
-        function joinRoom() {
+        // --- 1. НАСТРОЙКИ LIVEKIT ---
+        // Адрес твоего облака (берем из твоего generative_link.bat)
+        const LIVEKIT_URL = "wss://nona-mye78mpt.livekit.cloud"; 
+        
+        // ВРЕМЕННЫЙ ТОКЕН ДЛЯ ТЕСТОВ (Позже его будет выдавать Telegram-бот)
+        // Сгенерируй его один раз в консоли LiveKit (Settings -> Keys -> Generate Token) 
+        // для комнаты "Nona-Room" и вставь сюда:
+        const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzk5MzM5OTUsImlkZW50aXR5IjoiR3Vlc3RfOTM2NiIsImlzcyI6IkFQSXJYMmlrWllXQlU1bSIsIm5hbWUiOiJHdWVzdF85MzY2IiwibmJmIjoxNzc5ODQ3NTk1LCJzdWIiOiJHdWVzdF85MzY2IiwidmlkZW8iOnsicm9vbSI6Ik5vbmEtUm9vbSIsInJvb21Kb2luIjp0cnVlfX0.G7GqaXIvsRCVW3nEuMUJTn1sOFY169O0xEW8e6yodgU"; 
+
+        let room; // Глобальная переменная для хранения текущей сессии
+
+        // --- Переходы между страницами и логика связи ---
+        async function joinRoom() {
             clearInterval(timerInterval);
             document.getElementById('lobby-page').style.display = 'none';
             document.getElementById('room-page').style.display = 'block';
-            console.log(`Вход в комнату под именем: ${document.getElementById('username').value}`);
+            
+            const username = document.getElementById('username').value;
+            addMessageToTimeline(`Система: Инициализация протокола для ${username}...`, "ai");
+
+            try {
+                // 1. Создаем объект комнаты
+                room = new LivekitClient.Room();
+
+                // 2. Обработчик: Что делать, когда в комнате появляется видео (от малинки или других)
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    if (track.kind === LivekitClient.Track.Kind.Video) {
+                        console.log("Видеопоток получен!");
+                        const videoElement = document.getElementById('video-background');
+                        track.attach(videoElement); // Прикрепляем видео на задний фон
+                    }
+                });
+
+                // 3. Подключаемся к облаку
+                await room.connect(LIVEKIT_URL, TOKEN);
+                console.log("Успешное подключение к LiveKit Cloud!");
+                addMessageToTimeline("Связь с сервером установлена. Ожидание видеосигнала...", "ai");
+
+                // 4. (Опционально) Если кнопки микрофона и камеры включены - начинаем трансляцию с телефона
+                if (document.getElementById('btn-mic').classList.contains('active')) {
+                    await room.localParticipant.setMicrophoneEnabled(true);
+                }
+                if (document.getElementById('btn-cam').classList.contains('active')) {
+                    await room.localParticipant.setCameraEnabled(true);
+                }
+
+            } catch (error) {
+                console.error("Ошибка LiveKit:", error);
+                alert("Ошибка подключения: " + error.message);
+                leaveRoom(); // Откатываемся в лобби при ошибке
+            }
         }
 
         function leaveRoom() {
+            // Отключаемся от облака, если были подключены
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            
+            // Очищаем фон
+            document.getElementById('video-background').srcObject = null;
+
+            // Возвращаем UI
             document.getElementById('room-page').style.display = 'none';
-            document.getElementById('lobby-page').style.style.display = 'flex';
+            document.getElementById('lobby-page').style.display = 'flex';
+            
+            // Перезапускаем лобби
             countdown = 10;
             generateRandomName();
             startTimer();

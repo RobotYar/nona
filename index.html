@@ -170,6 +170,11 @@
                 <select id="mic-select" class="form-control"><option>Загрузка...</option></select>
             </div>
 
+            <div class="form-group">
+                <label>Динамик / Наушники</label>
+                <select id="speaker-select" class="form-control"><option>Загрузка...</option></select>
+            </div>
+
             <div class="timer-container">
                 <div class="timer-text" id="timer-text">Авто-вход через 10 сек...</div>
                 <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar"></div></div>
@@ -240,6 +245,7 @@
                 
                 const camSelect = document.getElementById('camera-select');
                 const micSelect = document.getElementById('mic-select');
+                const speakerSelect = document.getElementById('speaker-select');
                 camSelect.innerHTML = ''; micSelect.innerHTML = '';
                 
                 let videoCount = 0;
@@ -256,6 +262,11 @@
                         option.value = device.deviceId;
                         option.text = device.label || `Микрофон ${micSelect.length + 1}`;
                         micSelect.appendChild(option);
+                    } else if (device.kind === 'audiooutput') {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Динамик ${speakerSelect.length + 1}`;
+                        speakerSelect.appendChild(option);
                     }
                 });
 
@@ -319,12 +330,27 @@
                     dynacast: true,
                 });
 
-                // 2. Обработчик: Что делать, когда КТО-ТО ДРУГОЙ присылает видео в комнату
+                // 2. Обработчик: Что делать, когда присылают видео ИЛИ ЗВУК
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (track.kind === LivekitClient.Track.Kind.Video) {
-                        console.log("Ура! Получено видео от участника:", participant.identity);
+                        console.log("Ура! Получено видео от:", participant.identity);
                         const videoElement = document.getElementById('video-background');
-                        track.attach(videoElement); // Сажаем чужое видео на весь экран
+                        track.attach(videoElement); 
+                    } 
+                    else if (track.kind === LivekitClient.Track.Kind.Audio) {
+                        console.log("Ура! Получен звук от:", participant.identity);
+                        
+                        // Создаем невидимый плеер для звука
+                        const audioElement = document.createElement('audio');
+                        audioElement.autoplay = true;
+                        document.body.appendChild(audioElement);
+                        track.attach(audioElement);
+                        
+                        // Пытаемся направить звук в выбранные наушники
+                        const speakerId = document.getElementById('speaker-select').value;
+                        if (speakerId && typeof audioElement.setSinkId === 'function') {
+                            audioElement.setSinkId(speakerId).catch(e => console.warn("Не удалось переключить динамик", e));
+                        }
                     }
                 });
 

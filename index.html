@@ -284,10 +284,15 @@
         // Адрес твоего облака (берем из твоего generative_link.bat)
         const LIVEKIT_URL = "wss://nona-mye78mpt.livekit.cloud"; 
         
-        // ВРЕМЕННЫЙ ТОКЕН ДЛЯ ТЕСТОВ (Позже его будет выдавать Telegram-бот)
-        // Сгенерируй его один раз в консоли LiveKit (Settings -> Keys -> Generate Token) 
-        // для комнаты "Nona-Room" и вставь сюда:
-        const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzk5NDAyMTgsImlkZW50aXR5IjoiR3Vlc3RfMjk2ODciLCJpc3MiOiJBUElyWDJpa1pZV0JVNW0iLCJuYW1lIjoiR3Vlc3RfMjk2ODciLCJuYmYiOjE3Nzk4NTM4MTgsInN1YiI6Ikd1ZXN0XzI5Njg3IiwidmlkZW8iOnsicm9vbSI6Ik5vbmEtUm9vbSIsInJvb21Kb2luIjp0cnVlfX0.jcNzDXNc-i8bNNA514a1e96q_95hfeknzvh7aenJ69U"; 
+        // УМНЫЙ АВТОПОДХВАТ ТОКЕНА ИЗ ССЫЛКИ
+        const urlParams = new URLSearchParams(window.location.search);
+        const TOKEN = urlParams.get('token');
+
+        // ЕСЛИ ТОКЕНА НЕТ (просто открыли сайт без ссылки от бота), 
+        // ВЫДАЕМ ОШИБКУ ИЛИ ПРОСИМ ВОЙТИ ЧЕРЕЗ БОТА
+        if (!TOKEN) {
+            console.error("Токен не найден! Используйте ссылку от Telegram-бота.");
+        }
 
         let room; // Глобальная переменная для хранения текущей сессии
 

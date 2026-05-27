@@ -293,9 +293,16 @@
 
         // --- Переходы между страницами и логика связи ---
         async function joinRoom() {
-            clearInterval(timerInterval);
-            document.getElementById('lobby-page').style.display = 'none';
-            document.getElementById('room-page').style.display = 'block';
+        // Полностью останавливаем и уничтожаем таймер, чтобы он не сработал в фоне
+        clearInterval(timerInterval);
+        timerInterval = null; 
+        
+        // Прячем полоску таймера, чтобы она не смущала систему
+        const bar = document.getElementById('timer-bar');
+        if (bar) bar.style.width = '0%';
+        
+        document.getElementById('lobby-page').style.display = 'none';
+        document.getElementById('room-page').style.display = 'block';
             
             const username = document.getElementById('username').value;
             addMessageToTimeline(`Система: Инициализация протокола для ${username}...`, "ai");

@@ -317,46 +317,49 @@
 
         // --- Переходы между страницами и логика связи ---
         async function joinRoom() {
-        // Полностью останавливаем и уничтожаем таймер, чтобы он не сработал в фоне
-        clearInterval(timerInterval);
-        timerInterval = null; 
-        
-        // Прячем полоску таймера, чтобы она не смущала систему
-        const bar = document.getElementById('timer-bar');
-        if (bar) bar.style.width = '0%';
-        
-        document.getElementById('lobby-page').style.display = 'none';
-        document.getElementById('room-page').style.display = 'block';
+            // Полностью останавливаем и уничтожаем таймер
+            clearInterval(timerInterval);
+            timerInterval = null; 
+            
+            const bar = document.getElementById('timer-bar');
+            if (bar) bar.style.width = '0%';
+            
+            document.getElementById('lobby-page').style.display = 'none';
+            document.getElementById('room-page').style.display = 'block';
             
             const username = document.getElementById('username').value;
             addMessageToTimeline(`Система: Инициализация протокола для ${username}...`, "ai");
 
             try {
-                // 1. Создаем объект комнаты с дефолтными настройками захвата
+                // 0. Запоминаем выбор пользователя ДО подключения
+                const selectedMic = document.getElementById('mic-select').value;
+                const selectedCam = document.getElementById('camera-select').value;
+                const selectedSpeaker = document.getElementById('speaker-select').value;
+
+                // 1. Создаем объект комнаты
                 room = new LivekitClient.Room({
                     adaptiveStream: true,
                     dynacast: true,
                 });
 
-                // --- ДОПОЛНЕНИЕ: СЛУШАЕМ ТЕКСТОВЫЙ ЧАТ ОТ НОНЫ ---
+                // 2. Обработчик: ЧАТ ОТ НОНЫ
                 room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
                     const strData = new TextDecoder().decode(payload);
                     try {
                         const msg = JSON.parse(strData);
                         addMessageToTimeline(msg.text, msg.sender);
                         
-                        // Если панель чата скрыта — принудительно открываем её при ответе
+                        // Если панель чата скрыта — открываем
                         const chat = document.getElementById('chat-overlay');
                         if (chat.style.display !== 'flex') {
                             toggleChat();
                         }
                     } catch(e) {
                         console.log("Получены сырые текстовые данные:", strData);
-                        addMessageToTimeline(strData, "ai");
                     }
                 });
 
-                // 2. Обработчик: Что делать, когда присылают видео ИЛИ ЗВУК
+                // 3. Обработчик: ВИДЕО И ЗВУК ИЗ КОМНАТЫ
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (track.kind === LivekitClient.Track.Kind.Video) {
                         console.log("Ура! Получено видео от:", participant.identity);
@@ -366,43 +369,41 @@
                     else if (track.kind === LivekitClient.Track.Kind.Audio) {
                         console.log("Ура! Получен звук от:", participant.identity);
                         
-                        // Создаем невидимый плеер для звука
                         const audioElement = document.createElement('audio');
                         audioElement.autoplay = true;
                         document.body.appendChild(audioElement);
                         track.attach(audioElement);
                         
-                        // Направляем звук в выбранный в селекторе динамик/наушники
-                        const speakerId = document.getElementById('speaker-select').value;
-                        if (speakerId && typeof audioElement.setSinkId === 'function') {
-                            audioElement.setSinkId(speakerId).catch(e => console.warn("Не удалось переключить динамик", e));
+                        // ЖЕЛЕЗНО перенаправляем звук в выбранные наушники
+                        if (selectedSpeaker && selectedSpeaker !== "Загрузка..." && typeof audioElement.setSinkId === 'function') {
+                            audioElement.setSinkId(selectedSpeaker)
+                                .then(() => console.log("[+] Звук успешно направлен в динамик:", selectedSpeaker))
+                                .catch(e => console.warn("[-] Не удалось переключить динамик:", e));
                         }
                     }
                 });
 
-                // Обработчик: Что делать, если участник отключился
                 room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
                     track.detach();
                 });
 
-                // 3. Подключаемся к облаку по нашему токену
+                // 4. ПОДКЛЮЧЕНИЕ
                 await room.connect(LIVEKIT_URL, TOKEN);
                 console.log("Успешное подключение к LiveKit Cloud!");
                 addMessageToTimeline("Связь с облаком установлена!", "ai");
 
-                // --- ДОПОЛНЕНИЕ: ПРИНУДИТЕЛЬНО ПЕРЕКЛЮЧАЕМ УСТРОЙСТВА НА ТЕ, ЧТО ВЫБРАЛ ПОЛЬЗОВАТЕЛЬ ---
-                const selectedMic = document.getElementById('mic-select').value;
-                const selectedCam = document.getElementById('camera-select').value;
+                // 5. ПРИНУДИТЕЛЬНОЕ ПРИМЕНЕНИЕ ВСЕХ УСТРОЙСТВ (ВКЛЮЧАЯ ДИНАМИКИ!)
                 if (selectedMic && selectedMic !== "Загрузка...") await room.switchActiveDevice('audioinput', selectedMic);
                 if (selectedCam && selectedCam !== "Загрузка...") await room.switchActiveDevice('videoinput', selectedCam);
+                if (selectedSpeaker && selectedSpeaker !== "Загрузка...") await room.switchActiveDevice('audiooutput', selectedSpeaker);
 
-                // 4. УЛЬТРА-БЕЗОПАСНАЯ ПУБЛИКАЦИЯ (Игнорирует ошибки отсутствия железа)
+                // 6. ПУБЛИКАЦИЯ СВОИХ ПОТОКОВ (Без дублей)
                 if (document.getElementById('btn-mic').classList.contains('active')) {
                     try {
                         await room.localParticipant.setMicrophoneEnabled(true);
                         console.log("[+] Мой микрофон опубликован");
                     } catch(micError) {
-                        console.warn("[-] Микрофон не найден или занят другим приложением:", micError);
+                        console.warn("[-] Микрофон не найден:", micError);
                         addMessageToTimeline("Система: Микрофон не обнаружен, вход в режиме прослушивания.", "ai");
                     }
                 }
@@ -418,40 +419,11 @@
                         console.log("[+] Моя камера опубликована");
                     } catch(camError) {
                         console.warn("[-] Камера не найдена:", camError);
-                        addMessageToTimeline("Система: Камера не обнаружена, вход без видеопотока.", "ai");
+                        addMessageToTimeline("Система: Камера не обнаружена.", "ai");
                     }
                 }
 
-                addMessageToTimeline("Камера и микрофон запущены. Протокол активен. Слушаю вас.", "ai");
-
-                // 4. УЛЬТРА-БЕЗОПАСНАЯ ПУБЛИКАЦИЯ (Игнорирует ошибки отсутствия железа)
-                if (document.getElementById('btn-mic').classList.contains('active')) {
-                    try {
-                        await room.localParticipant.setMicrophoneEnabled(true);
-                        console.log("[+] Мой микрофон опубликован");
-                    } catch(micError) {
-                        console.warn("[-] Микрофон не найден или занят другим приложением:", micError);
-                        addMessageToTimeline("Система: Микрофон не обнаружен, вход в режиме прослушивания.", "ai");
-                    }
-                }
-
-                if (document.getElementById('btn-cam').classList.contains('active')) {
-                    try {
-                        await room.localParticipant.setCameraEnabled(true).then(() => {
-                            // Безопасное получение своей камеры для локального превью через встроенный метод
-                            const videoTrack = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-                            if (videoTrack && videoTrack.videoTrack) {
-                                videoTrack.videoTrack.attach(document.getElementById('video-background'));
-                            }
-                        });
-                        console.log("[+] Моя камера опубликована");
-                    } catch(camError) {
-                        console.warn("[-] Камера не найдена:", camError);
-                        addMessageToTimeline("Система: Камера не обнаружена, вход без видеопотока.", "ai");
-                    }
-                }
-
-                addMessageToTimeline("Камера и микрофон запущены. Протокол активен.", "ai");
+                addMessageToTimeline("Камера, микрофон и динамики настроены. Протокол активен. Слушаю вас.", "ai");
 
             } catch (error) {
                 console.error("Критическая ошибка LiveKit:", error);

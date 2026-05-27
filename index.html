@@ -239,18 +239,29 @@
         // Определение устройств (работает СТРОГО на https://)
         async function loadDevices() {
             try {
-                // Запрашиваем права у пользователя
-                await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                // 1. Пытаемся получить и звук, и видео
+                try {
+                    await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                } catch (e) {
+                    console.warn("Камера не найдена, запрашиваем только микрофон...");
+                    // Если камеры нет, запрашиваем только микрофон!
+                    await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+                
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 
                 const camSelect = document.getElementById('camera-select');
                 const micSelect = document.getElementById('mic-select');
                 const speakerSelect = document.getElementById('speaker-select');
-                camSelect.innerHTML = ''; micSelect.innerHTML = '';
+                
+                camSelect.innerHTML = ''; 
+                micSelect.innerHTML = ''; 
+                speakerSelect.innerHTML = '';
                 
                 let videoCount = 0;
 
                 devices.forEach(device => {
+                    // ... (оставь внутренности цикла как есть, они правильные)
                     if (device.kind === 'videoinput') {
                         const option = document.createElement('option');
                         option.value = device.deviceId;
@@ -270,7 +281,6 @@
                     }
                 });
 
-                // Если камер больше одной — активируем кнопку переключения
                 if(videoCount > 1) {
                     const switchBtn = document.getElementById('btn-switch-cam');
                     switchBtn.disabled = false;
@@ -278,9 +288,10 @@
                 }
 
             } catch (e) {
-                console.log("Доступ к устройствам не получен или протокол не HTTPS", e);
-                document.getElementById('camera-select').innerHTML = '<option>Нет доступа (нужен HTTPS)</option>';
-                document.getElementById('mic-select').innerHTML = '<option>Нет доступа (нужен HTTPS)</option>';
+                console.log("Доступ к устройствам категорически заблокирован", e);
+                document.getElementById('camera-select').innerHTML = '<option>Нет доступа</option>';
+                document.getElementById('mic-select').innerHTML = '<option>Нет доступа</option>';
+                document.getElementById('speaker-select').innerHTML = '<option>Нет доступа</option>';
             }
         }
 

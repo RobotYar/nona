@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nona - AI Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <style>
+        /* === 1. ОБЩИЕ НАСТРОЙКИ === */
+        :root {
+            --bg-color: #121212; /* Глубокий серый/черный */
+            --accent-color: #dd8f9f; /* Твой розовый акцент */
+            --text-color: #e0e0e0;
+            --panel-bg: rgba(30, 30, 30, 0.6);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Arial', sans-serif; /* Гротеск без засечек */
+            overflow: hidden; /* Запрещаем скролл страницы */
+            width: 100vw;
+            height: 100vh;
+        }
+
+        button, input, select { font-family: inherit; }
+
+        /* === 2. ЛОББИ === */
+        #lobby-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .info-card {
+            background: #1e1e1e;
+            border: 1px solid var(--accent-color);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(221, 143, 159, 0.1);
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent-color);
+            margin-bottom: 15px;
+            background-color: #333; /* Заглушка, если фото не загрузится */
+        }
+
+        .description { font-size: 14px; margin-bottom: 20px; line-height: 1.4; color: #aaa; }
+        .author-tag { font-size: 12px; color: var(--accent-color); margin-bottom: 20px; display: block;}
+
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; font-size: 12px; color: #888; margin-bottom: 5px; }
+        .form-control {
+            width: 100%; padding: 10px;
+            background: #2a2a2a; color: #fff;
+            border: 1px solid #444; border-radius: 6px; outline: none;
+        }
+        .form-control:focus { border-color: var(--accent-color); }
+
+        .join-btn {
+            width: 100%; padding: 12px; margin-top: 10px;
+            background: var(--accent-color); color: #000;
+            border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .join-btn:active { opacity: 0.8; }
+
+        .timer-container { margin-top: 15px; width: 100%; }
+        .timer-text { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .timer-bar-bg { width: 100%; height: 4px; background: #333; border-radius: 2px; overflow: hidden; }
+        .timer-bar-fill { height: 100%; background: var(--accent-color); width: 100%; transition: width 1s linear; }
+
+        /* === 3. ОСНОВНАЯ КОМНАТА === */
+        #room-page {
+            display: none; /* Скрыто по умолчанию */
+            width: 100%; height: 100%; position: relative;
+        }
+
+        /* Видео на весь экран */
+        #video-background {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1; background-color: #000;
+        }
+
+        /* Нижняя панель */
+        .control-panel {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 10; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+            background: var(--panel-bg); backdrop-filter: blur(10px);
+            padding: 12px; border-radius: 16px; width: 95%; max-width: 600px;
+        }
+
+        .ctrl-btn {
+            background: transparent; color: var(--text-color);
+            border: 1px solid #555; border-radius: 8px;
+            padding: 10px 15px; font-size: 14px; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 5px;
+        }
+        
+        .ctrl-btn.active { background: var(--accent-color); color: #000; border-color: var(--accent-color); }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: #333; }
+        .ctrl-btn.danger { border-color: #666; } /* Кнопка выхода без красного */
+        .ctrl-btn.danger:active { background: #444; }
+
+        /* === 4. ОВЕРЛЕЙ ЧАТА === */
+        #chat-overlay {
+            display: none; position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(18, 18, 18, 0.7); /* 70% непрозрачности */
+            backdrop-filter: blur(4px); z-index: 20;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(221, 143, 159, 0.3);
+        }
+        .close-chat-btn { background: none; border: none; color: var(--accent-color); font-size: 24px; cursor: pointer; }
+
+        .chat-timeline {
+            flex: 1; padding: 20px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+        .msg.human { background: rgba(255, 255, 255, 0.1); align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg.ai { background: rgba(221, 143, 159, 0.2); border: 1px solid rgba(221, 143, 159, 0.3); align-self: flex-start; border-bottom-left-radius: 2px; color: #fff;}
+        .msg img { max-width: 100%; border-radius: 8px; margin-top: 5px; border: 1px solid var(--accent-color); }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-page">
+        <div class="info-card">
+            <img src="https://via.placeholder.com/120x120/dd8f9f/000000?text=Aira" alt="Айра Сиратори" class="avatar">
+            <h2>Nona</h2>
+            <span class="author-tag">by RobotYar</span>
+            <p class="description">Умная девочка-иитуберша. Твой персональный ассистент в нейробиологии, искусственном интеллекте и программировании.</p>
+            
+            <div style="font-size: 12px; color: var(--accent-color); margin-bottom: 15px;">
+                👥 Людей в комнате: <span id="room-count">1</span>
+            </div>
+
+            <div class="form-group">
+                <label>Твое имя</label>
+                <input type="text" id="username" class="form-control" placeholder="Например, Жека">
+            </div>
+
+            <div class="form-group">
+                <label>Камера</label>
+                <select id="camera-select" class="form-control"><option>Загрузка...</option></select>
+            </div>
+
+            <div class="form-group">
+                <label>Микрофон</label>
+                <select id="mic-select" class="form-control"><option>Загрузка...</option></select>
+            </div>
+
+            <div class="timer-container">
+                <div class="timer-text" id="timer-text">Авто-вход через 10 сек...</div>
+                <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar"></div></div>
+            </div>
+
+            <button class="join-btn" onclick="joinRoom()">ВХОД В СИСТЕМУ</button>
+        </div>
+    </div>
+
+    <div id="room-page">
+        <video id="video-background" autoplay playsinline muted></video>
+
+        <div id="chat-overlay">
+            <div class="chat-header">
+                <h3 style="color: var(--accent-color);">Единый Журнал</h3>
+                <button class="close-chat-btn" onclick="toggleChat()">✖</button>
+            </div>
+            <div class="chat-timeline" id="chat-timeline">
+                <div class="msg human">Привет, Нона. Как меня слышно?</div>
+                <div class="msg ai">Привет! Слышу тебя отлично. Готова к работе с кодом или лекциями.</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button class="ctrl-btn danger" onclick="leaveRoom()">[X] Выход</button>
+            <button class="ctrl-btn active" id="btn-mic" onclick="toggleMic()">[М] Микр</button>
+            <button class="ctrl-btn active" id="btn-cam" onclick="toggleCam()">[К] Кам</button>
+            <button class="ctrl-btn" id="btn-switch-cam" disabled>[Р] Смена Кам</button>
+            <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
+            <button class="ctrl-btn" onclick="zoomIn()">[З] Зум</button>
+            <button class="ctrl-btn" onclick="toggleChat()">[Ч] Чат</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Логика Лобби ---
+        let countdown = 10;
+        let timerInterval;
+
+        function startTimer() {
+            const bar = document.getElementById('timer-bar');
+            const text = document.getElementById('timer-text');
+            timerInterval = setInterval(() => {
+                countdown--;
+                bar.style.width = (countdown * 10) + '%';
+                text.innerText = `Авто-вход через ${countdown} сек...`;
+                if(countdown <= 0) {
+                    clearInterval(timerInterval);
+                    joinRoom();
+                }
+            }, 1000);
+        }
+
+        // Имитация загрузки устройств
+        async function loadDevices() {
+            try {
+                // Запрашиваем права, чтобы браузер отдал названия устройств
+                await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                
+                const camSelect = document.getElementById('camera-select');
+                const micSelect = document.getElementById('mic-select');
+                camSelect.innerHTML = ''; micSelect.innerHTML = '';
+                
+                let videoCount = 0;
+
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Устройство ${device.deviceId.substring(0,5)}...`;
+                    if (device.kind === 'videoinput') {
+                        camSelect.appendChild(option);
+                        videoCount++;
+                    } else if (device.kind === 'audioinput') {
+                        micSelect.appendChild(option);
+                    }
+                });
+
+                // Логика кнопки "Смена камеры"
+                if(videoCount > 1) {
+                    const switchBtn = document.getElementById('btn-switch-cam');
+                    switchBtn.disabled = false;
+                    switchBtn.classList.add('active');
+                }
+
+            } catch (e) {
+                console.log("Доступ к устройствам запрещен", e);
+                document.getElementById('camera-select').innerHTML = '<option>Нет доступа</option>';
+                document.getElementById('mic-select').innerHTML = '<option>Нет доступа</option>';
+            }
+        }
+
+        // Запускаем при загрузке страницы
+        window.onload = () => {
+            loadDevices();
+            startTimer();
+        };
+
+        // --- Переходы между страницами ---
+        function joinRoom() {
+            clearInterval(timerInterval);
+            document.getElementById('lobby-page').style.display = 'none';
+            document.getElementById('room-page').style.display = 'block';
+            
+            // Здесь в будущем будет вызов LiveKit.connect()
+            console.log("Вход в комнату LiveKit...");
+        }
+
+        function leaveRoom() {
+            document.getElementById('room-page').style.display = 'none';
+            document.getElementById('lobby-page').style.display = 'flex';
+            countdown = 10;
+            startTimer();
+        }
+
+        // --- Логика Панели управления ---
+        function toggleMic() {
+            const btn = document.getElementById('btn-mic');
+            btn.classList.toggle('active');
+            // В будущем: room.localParticipant.setMicrophoneEnabled(...)
+        }
+
+        function toggleCam() {
+            const btn = document.getElementById('btn-cam');
+            btn.classList.toggle('active');
+            // В будущем: room.localParticipant.setCameraEnabled(...)
+        }
+
+        function takePhoto() {
+            // Демонстрация добавления фото в чат
+            addMessageToTimeline("Сделан снимок 2K", "ai", "https://via.placeholder.com/600x400/222/dd8f9f?text=Document_Scan.jpg");
+            if(document.getElementById('chat-overlay').style.display !== 'flex') toggleChat();
+        }
+
+        function zoomIn() { alert("Функция зума активирована (интеграция с камерой)"); }
+
+        // --- Логика Чата ---
+        function toggleChat() {
+            const chat = document.getElementById('chat-overlay');
+            chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function addMessageToTimeline(text, sender, imageUrl = null) {
+            const timeline = document.getElementById('chat-timeline');
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerText = text;
+            
+            if (imageUrl) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                div.appendChild(img);
+            }
+            
+            timeline.appendChild(div);
+            timeline.scrollTop = timeline.scrollHeight;
+        }
+    </script>
+</body>
+</html>

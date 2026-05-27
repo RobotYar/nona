@@ -209,6 +209,14 @@
         let countdown = 10;
         let timerInterval;
 
+        // Рандомайзер имени при старте страницы
+        function generateRandomName() {
+            const input = document.getElementById('username');
+            if (!input.value) {
+                input.value = `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+            }
+        }
+
         function startTimer() {
             const bar = document.getElementById('timer-bar');
             const text = document.getElementById('timer-text');
@@ -223,10 +231,10 @@
             }, 1000);
         }
 
-        // Имитация загрузки устройств
+        // Определение устройств (работает СТРОГО на https://)
         async function loadDevices() {
             try {
-                // Запрашиваем права, чтобы браузер отдал названия устройств
+                // Запрашиваем права у пользователя
                 await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 
@@ -237,18 +245,21 @@
                 let videoCount = 0;
 
                 devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `Устройство ${device.deviceId.substring(0,5)}...`;
                     if (device.kind === 'videoinput') {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Камера ${videoCount + 1}`;
                         camSelect.appendChild(option);
                         videoCount++;
                     } else if (device.kind === 'audioinput') {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Микрофон ${micSelect.length + 1}`;
                         micSelect.appendChild(option);
                     }
                 });
 
-                // Логика кнопки "Смена камеры"
+                // Если камер больше одной — активируем кнопку переключения
                 if(videoCount > 1) {
                     const switchBtn = document.getElementById('btn-switch-cam');
                     switchBtn.disabled = false;
@@ -256,14 +267,15 @@
                 }
 
             } catch (e) {
-                console.log("Доступ к устройствам запрещен", e);
-                document.getElementById('camera-select').innerHTML = '<option>Нет доступа</option>';
-                document.getElementById('mic-select').innerHTML = '<option>Нет доступа</option>';
+                console.log("Доступ к устройствам не получен или протокол не HTTPS", e);
+                document.getElementById('camera-select').innerHTML = '<option>Нет доступа (нужен HTTPS)</option>';
+                document.getElementById('mic-select').innerHTML = '<option>Нет доступа (нужен HTTPS)</option>';
             }
         }
 
         // Запускаем при загрузке страницы
         window.onload = () => {
+            generateRandomName(); // Сразу даем имя, если человек не успеет ввести свое
             loadDevices();
             startTimer();
         };
@@ -273,39 +285,35 @@
             clearInterval(timerInterval);
             document.getElementById('lobby-page').style.display = 'none';
             document.getElementById('room-page').style.display = 'block';
-            
-            // Здесь в будущем будет вызов LiveKit.connect()
-            console.log("Вход в комнату LiveKit...");
+            console.log(`Вход в комнату под именем: ${document.getElementById('username').value}`);
         }
 
         function leaveRoom() {
             document.getElementById('room-page').style.display = 'none';
-            document.getElementById('lobby-page').style.display = 'flex';
+            document.getElementById('lobby-page').style.style.display = 'flex';
             countdown = 10;
+            generateRandomName();
             startTimer();
         }
 
         // --- Логика Панели управления ---
         function toggleMic() {
-            const btn = document.getElementById('btn-mic');
-            btn.classList.toggle('active');
-            // В будущем: room.localParticipant.setMicrophoneEnabled(...)
+            document.getElementById('btn-mic').classList.toggle('active');
         }
 
         function toggleCam() {
-            const btn = document.getElementById('btn-cam');
-            btn.classList.toggle('active');
-            // В будущем: room.localParticipant.setCameraEnabled(...)
+            document.getElementById('btn-cam').classList.toggle('active');
         }
 
         function takePhoto() {
-            // Демонстрация добавления фото в чат
-            addMessageToTimeline("Сделан снимок 2K", "ai", "https://via.placeholder.com/600x400/222/dd8f9f?text=Document_Scan.jpg");
+            // Стабильная тестовая картинка аниме-персонажа, чтобы проверить отображение в чате
+            const testImgUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png";
+            addMessageToTimeline("Сделан снимок 2K документа", "ai", testImgUrl);
             if(document.getElementById('chat-overlay').style.display !== 'flex') toggleChat();
         }
 
         function zoomIn() { alert("Функция зума активирована (интеграция с камерой)"); }
-
+        
         // --- Логика Чата ---
         function toggleChat() {
             const chat = document.getElementById('chat-overlay');

@@ -391,11 +391,20 @@
                 console.log("Успешное подключение к LiveKit Cloud!");
                 addMessageToTimeline("Связь с облаком установлена!", "ai");
 
-                // 5. ПРИНУДИТЕЛЬНОЕ ПЕРЕКЛЮЧАЕМ УСТРОЙСТВА В SDK (ВКЛЮЧАЯ ДИНАМИКИ)
-                if (selectedMic && selectedMic !== "Загрузка...") await room.switchActiveDevice('audioinput', selectedMic);
-                if (selectedCam && selectedCam !== "Загрузка...") await room.switchActiveDevice('videoinput', selectedCam);
-                if (selectedSpeaker && selectedSpeaker !== "Загрузка...") await room.switchActiveDevice('audiooutput', selectedSpeaker);
-
+                // 5. БЕЗОПАСНОЕ ПЕРЕКЛЮЧЕНИЕ УСТРОЙСТВ (С ЗАЩИТОЙ ДЛЯ ТЕЛЕФОНОВ)
+                if (selectedMic && selectedMic !== "Загрузка...") {
+                    try { await room.switchActiveDevice('audioinput', selectedMic); } catch(e) {}
+                }
+                if (selectedCam && selectedCam !== "Загрузка...") {
+                    try { await room.switchActiveDevice('videoinput', selectedCam); } catch(e) {}
+                }
+                if (selectedSpeaker && selectedSpeaker !== "Загрузка...") {
+                    try { 
+                        await room.switchActiveDevice('audiooutput', selectedSpeaker); 
+                    } catch(e) { 
+                        console.warn("Телефон не поддерживает смену динамика, используем системный."); 
+                    }
+                }
                 // 6. БЕЗОПАСНАЯ ПУБЛИКАЦИЯ СВОИХ ТРЕКОВ
                 if (document.getElementById('btn-mic').classList.contains('active')) {
                     try {

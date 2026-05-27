@@ -331,7 +331,7 @@
             addMessageToTimeline(`Система: Инициализация протокола для ${username}...`, "ai");
 
             try {
-                // 0. Запоминаем выбор пользователя ДО подключения
+                // 0. Запоминаем точный выбор пользователя из выпадающих списков лобби
                 const selectedMic = document.getElementById('mic-select').value;
                 const selectedCam = document.getElementById('camera-select').value;
                 const selectedSpeaker = document.getElementById('speaker-select').value;
@@ -342,14 +342,13 @@
                     dynacast: true,
                 });
 
-                // 2. Обработчик: ЧАТ ОТ НОНЫ
+                // 2. Обработчик: ТЕКСТОВЫЙ ЧАТ ОТ НОНЫ (DataChannel)
                 room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
                     const strData = new TextDecoder().decode(payload);
                     try {
                         const msg = JSON.parse(strData);
                         addMessageToTimeline(msg.text, msg.sender);
                         
-                        // Если панель чата скрыта — открываем
                         const chat = document.getElementById('chat-overlay');
                         if (chat.style.display !== 'flex') {
                             toggleChat();
@@ -359,7 +358,7 @@
                     }
                 });
 
-                // 3. Обработчик: ВИДЕО И ЗВУК ИЗ КОМНАТЫ
+                // 3. Обработчик: ПОЛУЧЕНИЕ ПОТОКОВ (ВИДЕО И ЗВУК)
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (track.kind === LivekitClient.Track.Kind.Video) {
                         console.log("Ура! Получено видео от:", participant.identity);
@@ -369,16 +368,16 @@
                     else if (track.kind === LivekitClient.Track.Kind.Audio) {
                         console.log("Ура! Получен звук от:", participant.identity);
                         
+                        // ХАРДКОРНОЕ ПЕРЕНАПРАВЛЕНИЕ ЗВУКА НА УРОВНЕ ЭЛЕМЕНТА
                         const audioElement = document.createElement('audio');
                         audioElement.autoplay = true;
                         document.body.appendChild(audioElement);
                         track.attach(audioElement);
                         
-                        // ЖЕЛЕЗНО перенаправляем звук в выбранные наушники
                         if (selectedSpeaker && selectedSpeaker !== "Загрузка..." && typeof audioElement.setSinkId === 'function') {
                             audioElement.setSinkId(selectedSpeaker)
-                                .then(() => console.log("[+] Звук успешно направлен в динамик:", selectedSpeaker))
-                                .catch(e => console.warn("[-] Не удалось переключить динамик:", e));
+                                .then(() => console.log("[+] Поток перенаправлен на устройство:", selectedSpeaker))
+                                .catch(e => console.warn("[-] Ошибка SinkId элемента:", e));
                         }
                     }
                 });
@@ -387,24 +386,24 @@
                     track.detach();
                 });
 
-                // 4. ПОДКЛЮЧЕНИЕ
+                // 4. КОННЕКТ К ОБЛАКУ
                 await room.connect(LIVEKIT_URL, TOKEN);
                 console.log("Успешное подключение к LiveKit Cloud!");
                 addMessageToTimeline("Связь с облаком установлена!", "ai");
 
-                // 5. ПРИНУДИТЕЛЬНОЕ ПРИМЕНЕНИЕ ВСЕХ УСТРОЙСТВ (ВКЛЮЧАЯ ДИНАМИКИ!)
+                // 5. ПРИНУДИТЕЛЬНОЕ ПЕРЕКЛЮЧАЕМ УСТРОЙСТВА В SDK (ВКЛЮЧАЯ ДИНАМИКИ)
                 if (selectedMic && selectedMic !== "Загрузка...") await room.switchActiveDevice('audioinput', selectedMic);
                 if (selectedCam && selectedCam !== "Загрузка...") await room.switchActiveDevice('videoinput', selectedCam);
                 if (selectedSpeaker && selectedSpeaker !== "Загрузка...") await room.switchActiveDevice('audiooutput', selectedSpeaker);
 
-                // 6. ПУБЛИКАЦИЯ СВОИХ ПОТОКОВ (Без дублей)
+                // 6. БЕЗОПАСНАЯ ПУБЛИКАЦИЯ СВОИХ ТРЕКОВ
                 if (document.getElementById('btn-mic').classList.contains('active')) {
                     try {
                         await room.localParticipant.setMicrophoneEnabled(true);
                         console.log("[+] Мой микрофон опубликован");
                     } catch(micError) {
-                        console.warn("[-] Микрофон не найден:", micError);
-                        addMessageToTimeline("Система: Микрофон не обнаружен, вход в режиме прослушивания.", "ai");
+                        console.warn("[-] Микрофон занят или не найден:", micError);
+                        addMessageToTimeline("Система: Микрофон не обнаружен.", "ai");
                     }
                 }
 
@@ -418,12 +417,12 @@
                         });
                         console.log("[+] Моя камера опубликована");
                     } catch(camError) {
-                        console.warn("[-] Камера не найдена:", camError);
+                        console.warn("[-] Камера занята или не найдена:", camError);
                         addMessageToTimeline("Система: Камера не обнаружена.", "ai");
                     }
                 }
 
-                addMessageToTimeline("Камера, микрофон и динамики настроены. Протокол активен. Слушаю вас.", "ai");
+                addMessageToTimeline("Все системы синхронизированы. Слушаю вас.", "ai");
 
             } catch (error) {
                 console.error("Критическая ошибка LiveKit:", error);

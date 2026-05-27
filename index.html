@@ -318,12 +318,21 @@
                 console.log("Успешное подключение к LiveKit Cloud!");
                 addMessageToTimeline("Связь с сервером установлена. Ожидание видеосигнала...", "ai");
 
-                // 4. (Опционально) Если кнопки микрофона и камеры включены - начинаем трансляцию с телефона
-                if (document.getElementById('btn-mic').classList.contains('active')) {
-                    await room.localParticipant.setMicrophoneEnabled(true);
+                // 4. Умное включение устройств (защита от отсутствия вебки/микрофона)
+                const micSelect = document.getElementById('mic-select');
+                const camSelect = document.getElementById('camera-select');
+
+                // Включаем микрофон, только если кнопка активна И в списке есть реальное устройство
+                if (document.getElementById('btn-mic').classList.contains('active') && micSelect.value && !micSelect.value.includes('Нет доступа')) {
+                    try {
+                        await room.localParticipant.setMicrophoneEnabled(true);
+                    } catch(e) { console.warn("Не удалось запустить микрофон:", e); }
                 }
-                if (document.getElementById('btn-cam').classList.contains('active')) {
-                    await room.localParticipant.setCameraEnabled(true);
+                // Включаем камеру, только если кнопка активна И в списке есть реальное устройство
+                if (document.getElementById('btn-cam').classList.contains('active') && camSelect.value && !camSelect.value.includes('Нет доступа')) {
+                    try {
+                        await room.localParticipant.setCameraEnabled(true);
+                    } catch(e) { console.warn("Не удалось запустить камеру:", e); }
                 }
 
             } catch (error) {

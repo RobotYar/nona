@@ -346,13 +346,14 @@
 
                 if (document.getElementById('btn-cam').classList.contains('active')) {
                     try {
-                        await room.localParticipant.setCameraEnabled(true);
+                        await room.localParticipant.setCameraEnabled(true).then(() => {
+                            // Безопасное получение своей камеры для локального превью через встроенный метод
+                            const videoTrack = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                            if (videoTrack && videoTrack.videoTrack) {
+                                videoTrack.videoTrack.attach(document.getElementById('video-background'));
+                            }
+                        });
                         console.log("[+] Моя камера опубликована");
-                        
-                        const localVideoTracks = Array.from(room.localParticipant.videoTracks.values());
-                        if (localVideoTracks.length > 0 && localVideoTracks[0].track) {
-                            localVideoTracks[0].track.attach(document.getElementById('video-background'));
-                        }
                     } catch(camError) {
                         console.warn("[-] Камера не найдена:", camError);
                         addMessageToTimeline("Система: Камера не обнаружена, вход без видеопотока.", "ai");
@@ -390,11 +391,25 @@
 
         // --- Логика Панели управления ---
         function toggleMic() {
-            document.getElementById('btn-mic').classList.toggle('active');
+            const btn = document.getElementById('btn-mic');
+            if (!btn) return;
+            btn.classList.toggle('active');
+            // Если подключены к комнате — реально глушим/включаем микрофон в облаке
+            if (room && room.localParticipant) {
+                const enabled = btn.classList.contains('active');
+                room.localParticipant.setMicrophoneEnabled(enabled);
+            }
         }
-
+        
         function toggleCam() {
-            document.getElementById('btn-cam').classList.toggle('active');
+            const btn = document.getElementById('btn-cam');
+            if (!btn) return;
+            btn.classList.toggle('active');
+            // Если подключены к комнате — реально тушим/включаем камеру в облаке
+            if (room && room.localParticipant) {
+                const enabled = btn.classList.contains('active');
+                room.localParticipant.setCameraEnabled(enabled);
+            }
         }
 
         function takePhoto() {

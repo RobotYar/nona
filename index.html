@@ -116,6 +116,20 @@
         .ctrl-btn.danger { border-color: #666; } /* Кнопка выхода без красного */
         .ctrl-btn.danger:active { background: #444; }
 
+        /* Анимация уведомления для кнопки чата */
+        @keyframes pulse-alert {
+            0% { box-shadow: 0 0 0 0 rgba(221, 143, 159, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(221, 143, 159, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(221, 143, 159, 0); }
+        }
+        
+        .ctrl-btn.notify {
+            background-color: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+            animation: pulse-alert 1.5s infinite;
+        }
+
         /* === 4. ОВЕРЛЕЙ ЧАТА === */
         #chat-overlay {
             display: none; position: absolute; top: 0; left: 0;
@@ -200,9 +214,10 @@
             <button class="ctrl-btn active" id="btn-mic" onclick="toggleMic()">[М] Микр</button>
             <button class="ctrl-btn active" id="btn-cam" onclick="toggleCam()">[К] Кам</button>
             <button class="ctrl-btn" id="btn-switch-cam" disabled>[Р] Смена Кам</button>
+            <button class="ctrl-btn" onclick="requestTelemetry()">[Т] Телем</button> 
             <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
             <button class="ctrl-btn" onclick="zoomIn()">[З] Зум</button>
-            <button class="ctrl-btn" onclick="toggleChat()">[Ч] Чат</button>
+            <button class="ctrl-btn" id="btn-chat" onclick="toggleChat()">[Ч] Чат</button>
         </div>
     </div>
 
@@ -342,16 +357,32 @@
                     dynacast: true,
                 });
 
-                // 2. Обработчик: ТЕКСТОВЫЙ ЧАТ ОТ НОНЫ (DataChannel)
+                // 2. Обработчик: ТЕКСТОВЫЙ ЧАТ И ТЕЛЕМЕТРИЯ (DataChannel)
                 room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
                     const strData = new TextDecoder().decode(payload);
                     try {
                         const msg = JSON.parse(strData);
-                        addMessageToTimeline(msg.text, msg.sender);
                         
+                        // Обрабатываем ответ с телеметрией от Python
+                        if (msg.type === "telemetry_response") {
+                            const t = msg.data;
+                            let text = `📊 Телеметрия (Аптайм: ${t.uptime_sec}с):\n`;
+                            text += `🌡 CPU: ${t.cpu_temp_c}°C (Нагрузка: ${t.cpu_usage_percent}%)\n`;
+                            text += `💾 ОЗУ: ${t.ram_usage.used_mb}MB / ${t.ram_usage.total_mb}MB\n`;
+                            text += `💽 Диск: ${t.disk.free_gb}GB свободно\n`;
+                            text += `📶 WiFi: ${t.wifi_signal} | IP: ${t.ip_address}\n`;
+                            text += `🌐 Сеть: Вх ${t.network_speed.download_mbps} / Исх ${t.network_speed.upload_mbps} Mbps`;
+                            
+                            addMessageToTimeline(text, "ai");
+                        } 
+                        else if (msg.type === "chat" || msg.text) {
+                            addMessageToTimeline(msg.text, msg.sender || "ai");
+                        }
+
+                        // ВМЕСТО ОТКРЫТИЯ ЧАТА — ПОДСВЕЧИВАЕМ КНОПКУ
                         const chat = document.getElementById('chat-overlay');
                         if (chat.style.display !== 'flex') {
-                            toggleChat();
+                            document.getElementById('btn-chat').classList.add('notify');
                         }
                     } catch(e) {
                         console.log("Получены сырые текстовые данные:", strData);
@@ -471,6 +502,17 @@
                 room.localParticipant.setMicrophoneEnabled(enabled);
             }
         }
+
+        function requestTelemetry() {
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "get_telemetry" });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+                addMessageToTimeline("Запрос телеметрии отправлен...", "human");
+            } else {
+                alert("Нет связи с сервером!");
+            }
+        }
         
         function toggleCam() {
             const btn = document.getElementById('btn-cam');
@@ -484,10 +526,23 @@
         }
 
         function takePhoto() {
-            // Стабильная тестовая картинка аниме-персонажа, чтобы проверить отображение в чате
+            // Тестовая картинка для UI
             const testImgUrl = "img/aira.jpg";
-            addMessageToTimeline("Сделан снимок 2K документа", "ai", testImgUrl);
-            if(document.getElementById('chat-overlay').style.display !== 'flex') toggleChat();
+            addMessageToTimeline("Запрошен снимок высокого разрешения...", "human");
+            addMessageToTimeline("Сделан снимок", "ai", testImgUrl);
+            
+            // Если чат закрыт - подсвечиваем кнопку вместо открытия
+            const chat = document.getElementById('chat-overlay');
+            if(chat.style.display !== 'flex') {
+                document.getElementById('btn-chat').classList.add('notify');
+            }
+
+            // Отправляем команду в Python-скрипт Малинки!
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "take_photo" });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+            }
         }
 
         function zoomIn() { alert("Функция зума активирована (интеграция с камерой)"); }
@@ -495,7 +550,15 @@
         // --- Логика Чата ---
         function toggleChat() {
             const chat = document.getElementById('chat-overlay');
-            chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
+            const btn = document.getElementById('btn-chat');
+            
+            if (chat.style.display === 'flex') {
+                chat.style.display = 'none';
+            } else {
+                chat.style.display = 'flex';
+                // Как только мы открыли чат, убираем пульсацию с кнопки
+                if (btn) btn.classList.remove('notify');
+            }
         }
 
         function addMessageToTimeline(text, sender, imageUrl = null) {

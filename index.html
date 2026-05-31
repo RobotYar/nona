@@ -330,6 +330,9 @@
 
         let room; // Глобальная переменная для хранения текущей сессии
 
+        let photoBuffer = "";
+        let currentPhotoId = "";
+
         // --- Переходы между страницами и логика связи ---
         async function joinRoom() {
             // Полностью останавливаем и уничтожаем таймер
@@ -357,13 +360,42 @@
                     dynacast: true,
                 });
 
-                // 2. Обработчик: ТЕКСТОВЫЙ ЧАТ И ТЕЛЕМЕТРИЯ (DataChannel)
+                // 2. Обработчик: ТЕКСТОВЫЙ ЧАТ, ТЕЛЕМЕТРИЯ И ФОТО (DataChannel)
                 room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
                     const strData = new TextDecoder().decode(payload);
                     try {
                         const msg = JSON.parse(strData);
                         
-                        // Обрабатываем ответ с телеметрией от Python
+                        // --- ЛОГИКА СБОРКИ ФОТОГРАФИИ ---
+                        if (msg.cmd === "photo_chunk") {
+                            // Если это новый файл, очищаем буфер
+                            if (currentPhotoId !== msg.file_id) {
+                                currentPhotoId = msg.file_id;
+                                photoBuffer = "";
+                            }
+                            
+                            // Добавляем пришедший кусок base64 в буфер
+                            photoBuffer += msg.data;
+                            
+                            // Если это последний кусок — собираем и показываем картинку!
+                            if (msg.chunk_index === msg.total_chunks - 1) {
+                                const finalImageUrl = "data:image/jpeg;base64," + photoBuffer;
+                                addMessageToTimeline("Снимок получен (2K):", "ai", finalImageUrl);
+                                
+                                // Сбрасываем буфер
+                                photoBuffer = "";
+                                currentPhotoId = "";
+                                
+                                // Уведомляем пользователя пульсацией кнопки чата
+                                const chat = document.getElementById('chat-overlay');
+                                if (chat.style.display !== 'flex') {
+                                    document.getElementById('btn-chat').classList.add('notify');
+                                }
+                            }
+                            return; // Прерываем дальнейшую обработку, чтобы куски не лезли в текстовый чат
+                        }
+
+                        // --- ЛОГИКА ТЕЛЕМЕТРИИ ---
                         if (msg.type === "telemetry_response") {
                             const t = msg.data;
                             let text = `📊 Телеметрия (Аптайм: ${t.uptime_sec}с):\n`;
@@ -375,11 +407,12 @@
                             
                             addMessageToTimeline(text, "ai");
                         } 
+                        // --- ЛОГИКА ЧАТА ---
                         else if (msg.type === "chat" || msg.text) {
                             addMessageToTimeline(msg.text, msg.sender || "ai");
                         }
 
-                        // ВМЕСТО ОТКРЫТИЯ ЧАТА — ПОДСВЕЧИВАЕМ КНОПКУ
+                        // Подсвечиваем кнопку чата при новом сообщении
                         const chat = document.getElementById('chat-overlay');
                         if (chat.style.display !== 'flex') {
                             document.getElementById('btn-chat').classList.add('notify');
@@ -526,22 +559,21 @@
         }
 
         function takePhoto() {
-            // Тестовая картинка для UI
-            const testImgUrl = "img/aira.jpg";
             addMessageToTimeline("Запрошен снимок высокого разрешения...", "human");
-            addMessageToTimeline("Сделан снимок", "ai", testImgUrl);
             
-            // Если чат закрыт - подсвечиваем кнопку вместо открытия
+            // Если чат закрыт - подсвечиваем кнопку
             const chat = document.getElementById('chat-overlay');
             if(chat.style.display !== 'flex') {
                 document.getElementById('btn-chat').classList.add('notify');
             }
 
-            // Отправляем команду в Python-скрипт Малинки!
+            // Отправляем реальную команду на Raspberry Pi
             if (room && room.localParticipant) {
                 const payload = JSON.stringify({ cmd: "take_photo" });
                 const encoder = new TextEncoder();
                 room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+            } else {
+                alert("Нет связи с камерой!");
             }
         }
 

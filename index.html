@@ -577,7 +577,72 @@
             }
         }
 
-        function zoomIn() { alert("Функция зума активирована (интеграция с камерой)"); }
+        let isZoomMode = false;
+        let isZoomedIn = false;
+
+        function zoomIn() {
+            const video = document.getElementById('video-background');
+            const btn = document.getElementById('btn-chat').previousElementSibling; // Кнопка зума
+            
+            // Если уже приближено - отдаляем обратно (сброс в 1.0)
+            if (isZoomedIn) {
+                isZoomedIn = false;
+                sendZoomCommand(0, 0, 1.0, 1.0); 
+                addMessageToTimeline("Зум сброшен (Full View).", "ai");
+                return;
+            }
+
+            // Переключаем режим прицеливания
+            isZoomMode = !isZoomMode;
+            if (isZoomMode) {
+                video.style.filter = "grayscale(100%) brightness(0.4)";
+                video.style.cursor = "crosshair";
+                addMessageToTimeline("Режим прицеливания. Кликните по тексту на видео.", "ai");
+            } else {
+                video.style.filter = "none";
+                video.style.cursor = "default";
+            }
+        }
+
+        // Обработчик клика по видео для вычисления координат
+        document.getElementById('video-background').addEventListener('click', function(e) {
+            if (!isZoomMode) return;
+
+            const rect = this.getBoundingClientRect();
+            
+            // Получаем координаты клика в процентах (от 0.0 до 1.0)
+            let relativeX = (e.clientX - rect.left) / rect.width;
+            let relativeY = (e.clientY - rect.top) / rect.height;
+            
+            // Возвращаем видео нормальный цвет
+            this.style.filter = "none";
+            this.style.cursor = "default";
+            isZoomMode = false;
+            isZoomedIn = true;
+            
+            // Задаем размер окна (0.4 = приближение в 2.5 раза)
+            let w = 0.4;
+            let h = 0.4;
+            
+            // Высчитываем левый верхний угол, центрируя по клику и не давая вылезти за края матрицы
+            let x = Math.max(0, Math.min(relativeX - w/2, 1 - w));
+            let y = Math.max(0, Math.min(relativeY - h/2, 1 - h));
+            
+            addMessageToTimeline(`Перестройка оптики на X:${x.toFixed(2)} Y:${y.toFixed(2)}...`, "human");
+            sendZoomCommand(x, y, w, h);
+        });
+
+        // Отправка команды на Малинку
+        function sendZoomCommand(x, y, w, h) {
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "set_zoom", x: x, y: y, w: w, h: h });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { 
+                    reliable: true,
+                    destinationIdentities: ["nona-pi-camera"]
+                });
+            }
+        }
         
         // --- Логика Чата ---
         function toggleChat() {

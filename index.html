@@ -198,9 +198,10 @@
         </div>
     </div>
 
-    <div id="room-page">
+<div id="room-page">
         <video id="video-background" autoplay playsinline muted></video>
-
+        
+        <canvas id="freeze-frame" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none;"></canvas>
         <div id="chat-overlay">
             <div class="chat-header">
                 <h3 style="color: var(--accent-color);">Единый Журнал</h3>
@@ -429,8 +430,12 @@
                         const videoElement = document.getElementById('video-background');
                         track.attach(videoElement); 
                         
-                        videoElement.style.transition = "none";
-                        videoElement.style.transform = "scale(1.0)";
+                        // Прячем замороженный кадр с небольшой задержкой (чтобы видео успело прогрузиться без мерцания)
+                        setTimeout(() => {
+                            const canvas = document.getElementById('freeze-frame');
+                            canvas.style.display = "none";
+                            canvas.style.transform = "scale(1.0)";
+                        }, 800); // 800 мс задержки
                     }
                     else if (track.kind === LivekitClient.Track.Kind.Audio) {
                         console.log("Ура! Получен звук от:", participant.identity);
@@ -659,10 +664,18 @@
             addMessageToTimeline(`Наведение оптики...`, "human");
             sendZoomCommand(x, y, w, h);
 
-            // 3. МГНОВЕННЫЙ ЦИФРОВОЙ ЗУМ (Скрывает 4 секунды задержки Малинки)
-            video.style.transition = "transform 0.4s ease-out";
-            video.style.transformOrigin = `${relativeX * 100}% ${relativeY * 100}%`;
-            video.style.transform = `scale(${currentZoomLevel})`;
+            // ЗАМОРОЗКА КАДРА (CANVAS FREEZE) ---
+            const canvas = document.getElementById('freeze-frame');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            // Рисуем текущий кадр на холст
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'block'; // Показываем холст поверх чернеющего видео
+            
+            // Применяем красивый цифровой зум к холсту, а не к видео!
+            canvas.style.transition = "transform 0.4s ease-out";
+            canvas.style.transformOrigin = `${relativeX * 100}% ${relativeY * 100}%`;
+            canvas.style.transform = `scale(${currentZoomLevel})`;
         });
 
         // Отправка команды

@@ -216,7 +216,7 @@
             <button class="ctrl-btn" id="btn-switch-cam" disabled>[Р] Смена Кам</button>
             <button class="ctrl-btn" onclick="requestTelemetry()">[Т] Телем</button> 
             <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
-            <button class="ctrl-btn" onclick="zoomIn()">[З] Зум</button>
+            <button class="ctrl-btn" id="btn-zoom" onclick="zoomIn()">[З] Зум 1x</button>
             <button class="ctrl-btn" id="btn-chat" onclick="toggleChat()">[Ч] Чат</button>
         </div>
     </div>
@@ -580,70 +580,92 @@
             }
         }
 
+        const ZOOM_STEPS = [1.0, 1.5, 2.0, 3.0];
+        let zoomIndex = 0; // Начинаем с 1.0 (индекс 0)
         let isZoomMode = false;
-        let isZoomedIn = false;
 
         function zoomIn() {
             const video = document.getElementById('video-background');
-            const btn = document.getElementById('btn-chat').previousElementSibling; // Кнопка зума
+            const btn = document.getElementById('btn-zoom');
             
-            // Если уже приближено - отдаляем обратно (сброс в 1.0)
-            if (isZoomedIn) {
-                isZoomedIn = false;
-                sendZoomCommand(0, 0, 1.0, 1.0); 
-                addMessageToTimeline("Зум сброшен (Full View).", "ai");
+            // Увеличиваем индекс по кругу (0 -> 1 -> 2 -> 3 -> 0...)
+            zoomIndex = (zoomIndex + 1) % ZOOM_STEPS.length;
+            let currentZoomLevel = ZOOM_STEPS[zoomIndex];
+            
+            // Сразу меняем текст на кнопке
+            btn.innerText = `[З] Зум ${currentZoomLevel}x`;
 
-                // Плавный откат цифрового зума назад ---
-                video.style.transition = "transform 0.4s ease-out";
-                video.style.transform = `scale(1.0)`;
-                return;
-            }
-
-            // Переключаем режим прицеливания
-            isZoomMode = !isZoomMode;
-            if (isZoomMode) {
-                video.style.filter = "grayscale(100%) brightness(0.4)";
-                video.style.cursor = "crosshair";
-                addMessageToTimeline("Режим прицеливания. Кликните по тексту на видео.", "ai");
-            } else {
+            if (currentZoomLevel === 1.0) {
+                // === РЕЖИМ СБРОСА (1x) ===
+                isZoomMode = false;
                 video.style.filter = "none";
                 video.style.cursor = "default";
+                btn.classList.remove('active');
+                
+                addMessageToTimeline("Оптика сброшена (Full View).", "ai");
+                sendZoomCommand(0, 0, 1.0, 1.0); // Отправляем команду Малинке
+                
+                // Плавный откат визуального интерфейса
+                video.style.transition = "transform 0.4s ease-out";
+                video.style.transform = `scale(1.0)`;
+            } else {
+                // === РЕЖИМ ПРИЦЕЛИВАНИЯ ===
+                isZoomMode = true;
+                btn.classList.add('active');
+                video.style.filter = "grayscale(100%) brightness(0.4)";
+                video.style.cursor = "crosshair";
+                addMessageToTimeline(`Прицел ${currentZoomLevel}x. Кликните по видео.`, "ai");
             }
         }
-
-        // Обработчик клика по видео для вычисления координат
+        // Обработчик клика по видео для вычисления точных координат
         document.getElementById('video-background').addEventListener('click', function(e) {
             if (!isZoomMode) return;
 
-            const rect = this.getBoundingClientRect();
+            const video = this;
+            const rect = video.getBoundingClientRect();
+            let currentZoomLevel = ZOOM_STEPS[zoomIndex];
             
-            // Получаем координаты клика в процентах (от 0.0 до 1.0)
-            let relativeX = (e.clientX - rect.left) / rect.width;
-            let relativeY = (e.clientY - rect.top) / rect.height;
+            // 1. УМНАЯ МАТЕМАТИКА: Учитываем обрезку видео на телефоне (object-fit: cover)
+            const elRatio = rect.width / rect.height;
+            const vidRatio = video.videoWidth / video.videoHeight;
+            let scale, xOffset = 0, yOffset = 0;
             
-            // Возвращаем видео нормальный цвет
-            this.style.filter = "none";
-            this.style.cursor = "default";
+            if (elRatio > vidRatio) {
+                scale = rect.width / video.videoWidth;
+                yOffset = (rect.height - video.videoHeight * scale) / 2;
+            } else {
+                scale = rect.height / video.videoHeight;
+                xOffset = (rect.width - video.videoWidth * scale) / 2;
+            }
+            
+            // Точные координаты клика с учетом скрытых краев
+            const realX = (e.clientX - rect.left - xOffset) / scale;
+            const realY = (e.clientY - rect.top - yOffset) / scale;
+            
+            let relativeX = realX / video.videoWidth;
+            let relativeY = realY / video.videoHeight;
+
+            // Выключаем прицел (но текст кнопки оставляем, например "2x", чтобы помнить текущий зум)
+            video.style.filter = "none";
+            video.style.cursor = "default";
             isZoomMode = false;
-            isZoomedIn = true;
             
-            // Задаем размер окна (0.4 = приближение в 2.5 раза)
-            let w = 0.4;
-            let h = 0.4;
-            
-            // Высчитываем левый верхний угол, центрируя по клику и не давая вылезти за края матрицы
+            // 2. Формируем аппаратное окно для Малинки
+            let w = 1.0 / currentZoomLevel;
+            let h = 1.0 / currentZoomLevel;
             let x = Math.max(0, Math.min(relativeX - w/2, 1 - w));
             let y = Math.max(0, Math.min(relativeY - h/2, 1 - h));
             
-            addMessageToTimeline(`Перестройка оптики на X:${x.toFixed(2)} Y:${y.toFixed(2)}...`, "human");
+            addMessageToTimeline(`Наведение оптики...`, "human");
             sendZoomCommand(x, y, w, h);
 
+            // 3. МГНОВЕННЫЙ ЦИФРОВОЙ ЗУМ (Скрывает 4 секунды задержки Малинки)
             video.style.transition = "transform 0.4s ease-out";
             video.style.transformOrigin = `${relativeX * 100}% ${relativeY * 100}%`;
             video.style.transform = `scale(${currentZoomLevel})`;
         });
 
-        // Отправка команды на Малинку
+        // Отправка команды
         function sendZoomCommand(x, y, w, h) {
             if (room && room.localParticipant) {
                 const payload = JSON.stringify({ cmd: "set_zoom", x: x, y: y, w: w, h: h });

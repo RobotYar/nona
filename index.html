@@ -217,6 +217,7 @@
             <button class="ctrl-btn" id="btn-switch-cam" disabled>[Р] Смена Кам</button>
             <button class="ctrl-btn" onclick="requestTelemetry()">[Т] Телем</button> 
             <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
+            <button class="ctrl-btn" id="btn-mode" onclick="toggleMode()">[Реж] Стандарт</button>
             <button class="ctrl-btn" id="btn-zoom" onclick="zoomIn()">[З] Зум 1x</button>
             <button class="ctrl-btn" id="btn-chat" onclick="toggleChat()">[Ч] Чат</button>
         </div>
@@ -696,7 +697,50 @@
                 });
             }
         }
-        
+
+        // --- ЛОГИКА ПРОФИЛЕЙ (РЕЖИМЫ КАМЕРЫ) ---
+        let currentMode = "standard";
+
+        function toggleMode() {
+            const btn = document.getElementById('btn-mode');
+            
+            // 1. Замораживаем текущий кадр, чтобы скрыть "моргание" камеры при перезапуске
+            const canvas = freezeVideo();
+
+            // 2. Переключаем состояние интерфейса
+            if (currentMode === "standard") {
+                currentMode = "monitor";
+                btn.innerText = "[Реж] Монитор";
+                btn.classList.add('active'); // Подсвечиваем кнопку розовым
+                addMessageToTimeline("Смена оптики: Профиль 'Монитор' (анти-пересвет).", "ai");
+            } else {
+                currentMode = "standard";
+                btn.innerText = "[Реж] Стандарт";
+                btn.classList.remove('active'); // Убираем подсветку
+                addMessageToTimeline("Смена оптики: Профиль 'Стандарт' (комната).", "ai");
+            }
+
+            // 3. Отправляем команду на Малинку
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "set_mode", mode: currentMode });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+            } else {
+                alert("Нет связи с камерой!");
+            }
+
+            // 4. Плавно растворяем замороженный холст через 3.5 секунды
+            // (К этому моменту Малинка уже запустит новый поток)
+            setTimeout(() => {
+                canvas.style.transition = "opacity 0.8s ease-in-out";
+                canvas.style.opacity = "0";
+                setTimeout(() => {
+                    canvas.style.display = "none";
+                    canvas.style.transform = "scale(1.0)";
+                }, 800);
+            }, 3500);
+        }
+                
         // --- Логика Чата ---
         function toggleChat() {
             const chat = document.getElementById('chat-overlay');

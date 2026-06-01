@@ -428,7 +428,10 @@
                         console.log("Ура! Получено видео от:", participant.identity);
                         const videoElement = document.getElementById('video-background');
                         track.attach(videoElement); 
-                    } 
+                        
+                        videoElement.style.transition = "none";
+                        videoElement.style.transform = "scale(1.0)";
+                    }
                     else if (track.kind === LivekitClient.Track.Kind.Audio) {
                         console.log("Ура! Получен звук от:", participant.identity);
                         
@@ -447,7 +450,7 @@
                 });
 
                 room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
-                    track.detach();
+                    // track.detach();
                 });
 
                 // 4. КОННЕКТ К ОБЛАКУ
@@ -589,6 +592,10 @@
                 isZoomedIn = false;
                 sendZoomCommand(0, 0, 1.0, 1.0); 
                 addMessageToTimeline("Зум сброшен (Full View).", "ai");
+
+                // Плавный откат цифрового зума назад ---
+                video.style.transition = "transform 0.4s ease-out";
+                video.style.transform = `scale(1.0)`;
                 return;
             }
 
@@ -630,6 +637,10 @@
             
             addMessageToTimeline(`Перестройка оптики на X:${x.toFixed(2)} Y:${y.toFixed(2)}...`, "human");
             sendZoomCommand(x, y, w, h);
+
+            video.style.transition = "transform 0.4s ease-out";
+            video.style.transformOrigin = `${relativeX * 100}% ${relativeY * 100}%`;
+            video.style.transform = `scale(${currentZoomLevel})`;
         });
 
         // Отправка команды на Малинку

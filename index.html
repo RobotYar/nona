@@ -219,6 +219,7 @@
             <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
             <button class="ctrl-btn" id="btn-mode" onclick="toggleMode()">[Реж] Стандарт</button>
             <button class="ctrl-btn" id="btn-zoom" onclick="zoomIn()">[З] Зум 1x</button>
+            <button class="ctrl-btn" onclick="resetStream()" style="color: #ffcc00;">[↻] Синхр</button>
             <button class="ctrl-btn" id="btn-chat" onclick="toggleChat()">[Ч] Чат</button>
         </div>
     </div>
@@ -740,7 +741,31 @@
                 }, 800);
             }, 3500);
         }
-                
+        // --- ЛОГИКА ПРИНУДИТЕЛЬНОЙ СИНХРОНИЗАЦИИ (СБРОС ЗАДЕРЖКИ) ---
+        function resetStream() {
+            addMessageToTimeline("Принудительная очистка буфера. Синхронизация потока...", "human");
+            
+            // Замораживаем последний кадр, чтобы скрыть процесс перезапуска
+            const canvas = freezeVideo();
+            
+            // Отправляем команду на Малинку
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "reset_stream" });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+            }
+            
+            // Убираем холст через 4 секунды (когда стрим гарантированно поднимется свежим)
+            setTimeout(() => {
+                canvas.style.transition = "opacity 0.8s ease-in-out";
+                canvas.style.opacity = "0";
+                setTimeout(() => {
+                    canvas.style.display = "none";
+                    canvas.style.transform = "scale(1.0)";
+                }, 800);
+            }, 4000);
+        }
+        
         // --- Логика Чата ---
         function toggleChat() {
             const chat = document.getElementById('chat-overlay');

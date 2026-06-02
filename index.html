@@ -217,6 +217,7 @@
             <button class="ctrl-btn" id="btn-switch-cam" disabled>[Р] Смена Кам</button>
             <button class="ctrl-btn" onclick="requestTelemetry()">[Т] Телем</button> 
             <button class="ctrl-btn" onclick="takePhoto()">[Ф] Фото</button>
+            <button class="ctrl-btn" id="btn-focus" onclick="toggleFocus()">[Фок] Авто</button>
             <button class="ctrl-btn" id="btn-mode" onclick="toggleMode()">[Реж] Стандарт</button>
             <button class="ctrl-btn" id="btn-zoom" onclick="zoomIn()">[З] Зум 1x</button>
             <button class="ctrl-btn" onclick="resetStream()" style="color: #ffcc00;">[↻] Синхр</button>
@@ -729,6 +730,47 @@
             } else {
                 alert("Нет связи с камерой!");
             }
+
+            // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
+        let isOperatorFocus = false;
+
+        function toggleFocus() {
+            const btn = document.getElementById('btn-focus');
+            
+            // 1. Замораживаем кадр (чтобы скрыть моргание камеры при перезапуске потока)
+            const canvas = freezeVideo();
+
+            // 2. Переключаем состояние интерфейса
+            isOperatorFocus = !isOperatorFocus;
+            if (isOperatorFocus) {
+                btn.innerText = "[Фок] 65 см";
+                btn.classList.add('active'); // Подсвечиваем кнопку розовым
+                addMessageToTimeline("Фокус: РУЧНОЙ (Зафиксирован на дистанции 65 см).", "ai");
+            } else {
+                btn.innerText = "[Фок] Авто";
+                btn.classList.remove('active'); // Убираем подсветку
+                addMessageToTimeline("Фокус: АВТОМАТИКА (Поиск по кадру).", "ai");
+            }
+
+            // 3. Отправляем команду на Малинку через LiveKit
+            if (room && room.localParticipant) {
+                const payload = JSON.stringify({ cmd: "toggle_focus" });
+                const encoder = new TextEncoder();
+                room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+            } else {
+                alert("Нет связи с камерой!");
+            }
+
+            // 4. Плавно растворяем замороженный холст через 3.5 секунды
+            setTimeout(() => {
+                canvas.style.transition = "opacity 0.8s ease-in-out";
+                canvas.style.opacity = "0";
+                setTimeout(() => {
+                    canvas.style.display = "none";
+                    canvas.style.transform = "scale(1.0)";
+                }, 800);
+            }, 3500);
+        }
 
             // 4. Плавно растворяем замороженный холст через 3.5 секунды
             // (К этому моменту Малинка уже запустит новый поток)

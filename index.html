@@ -738,25 +738,42 @@
         } // <--- ЗДЕСЬ ФУНКЦИЯ TOGGLE MODE ДОЛЖНА ЗАКАНЧИВАТЬСЯ
 
         // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
-        let isOperatorFocus = false;
+        // --- ЛОГИКА ФОКУСА (ЦИКЛ 60-90 СМ) ---
+        const FOCUS_STEPS = [
+            { label: "Авто", mode: "auto", diopters: 0 },
+            { label: "60 см", mode: "manual", diopters: 1.67 }, // 1 / 0.60
+            { label: "70 см", mode: "manual", diopters: 1.43 }, // 1 / 0.70
+            { label: "80 см", mode: "manual", diopters: 1.25 }, // 1 / 0.80
+            { label: "90 см", mode: "manual", diopters: 1.11 }  // 1 / 0.90
+        ];
+        let focusIndex = 0;
 
         function toggleFocus() {
             const btn = document.getElementById('btn-focus');
             const canvas = freezeVideo();
 
-            isOperatorFocus = !isOperatorFocus;
-            if (isOperatorFocus) {
-                btn.innerText = "[Фок] 65 см";
+            // Переключаемся на следующий шаг
+            focusIndex = (focusIndex + 1) % FOCUS_STEPS.length;
+            const currentFocus = FOCUS_STEPS[focusIndex];
+
+            // Обновляем кнопку
+            btn.innerText = `[Фок] ${currentFocus.label}`;
+            
+            if (currentFocus.mode === "manual") {
                 btn.classList.add('active'); 
-                addMessageToTimeline("Фокус: РУЧНОЙ (Зафиксирован на дистанции 65 см).", "ai");
+                addMessageToTimeline(`Фокус: РУЧНОЙ (Дистанция: ${currentFocus.label}).`, "ai");
             } else {
-                btn.innerText = "[Фок] Авто";
                 btn.classList.remove('active'); 
                 addMessageToTimeline("Фокус: АВТОМАТИКА (Поиск по кадру).", "ai");
             }
 
+            // Отправляем команду и точное значение диоптрий на Малинку
             if (room && room.localParticipant) {
-                const payload = JSON.stringify({ cmd: "toggle_focus" });
+                const payload = JSON.stringify({ 
+                    cmd: "set_focus", 
+                    mode: currentFocus.mode, 
+                    lens_pos: currentFocus.diopters 
+                });
                 const encoder = new TextEncoder();
                 room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
             } else {
@@ -772,7 +789,6 @@
                 }, 800);
             }, 3500);
         }
-
         // --- ЛОГИКА ПРИНУДИТЕЛЬНОЙ СИНХРОНИЗАЦИИ (СБРОС ЗАДЕРЖКИ) ---
         function resetStream() {
             addMessageToTimeline("Принудительная очистка буфера. Синхронизация потока...", "human");

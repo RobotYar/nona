@@ -739,12 +739,16 @@
 
         // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
         // --- ЛОГИКА ФОКУСА (ЦИКЛ 60-90 СМ) ---
+        // --- ЛОГИКА ФОКУСА (МИКРОПОДСТРОЙКА 60-90 СМ) ---
         const FOCUS_STEPS = [
             { label: "Авто", mode: "auto", diopters: 0 },
-            { label: "60 см", mode: "manual", diopters: 1.67 }, // 1 / 0.60
-            { label: "70 см", mode: "manual", diopters: 1.43 }, // 1 / 0.70
-            { label: "80 см", mode: "manual", diopters: 1.25 }, // 1 / 0.80
-            { label: "90 см", mode: "manual", diopters: 1.11 }  // 1 / 0.90
+            { label: "90 см", mode: "manual", diopters: 1.11 },
+            { label: "85 см", mode: "manual", diopters: 1.18 },
+            { label: "80 см", mode: "manual", diopters: 1.25 },
+            { label: "75 см", mode: "manual", diopters: 1.33 },
+            { label: "70 см", mode: "manual", diopters: 1.43 },
+            { label: "65 см", mode: "manual", diopters: 1.54 },
+            { label: "60 см", mode: "manual", diopters: 1.67 }
         ];
         let focusIndex = 0;
 
@@ -761,13 +765,13 @@
             
             if (currentFocus.mode === "manual") {
                 btn.classList.add('active'); 
-                addMessageToTimeline(`Фокус: РУЧНОЙ (Дистанция: ${currentFocus.label}).`, "ai");
+                addMessageToTimeline(`Фокус: РУЧНОЙ (Калибровка на ${currentFocus.label}).`, "ai");
             } else {
                 btn.classList.remove('active'); 
                 addMessageToTimeline("Фокус: АВТОМАТИКА (Поиск по кадру).", "ai");
             }
 
-            // Отправляем команду и точное значение диоптрий на Малинку
+            // Отправляем команду на Малинку
             if (room && room.localParticipant) {
                 const payload = JSON.stringify({ 
                     cmd: "set_focus", 

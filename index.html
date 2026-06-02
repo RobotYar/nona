@@ -705,24 +705,20 @@
 
         function toggleMode() {
             const btn = document.getElementById('btn-mode');
-            
-            // 1. Замораживаем текущий кадр, чтобы скрыть "моргание" камеры при перезапуске
             const canvas = freezeVideo();
 
-            // 2. Переключаем состояние интерфейса
             if (currentMode === "standard") {
                 currentMode = "monitor";
                 btn.innerText = "[Реж] Монитор";
-                btn.classList.add('active'); // Подсвечиваем кнопку розовым
+                btn.classList.add('active'); 
                 addMessageToTimeline("Смена оптики: Профиль 'Монитор' (анти-пересвет).", "ai");
             } else {
                 currentMode = "standard";
                 btn.innerText = "[Реж] Стандарт";
-                btn.classList.remove('active'); // Убираем подсветку
+                btn.classList.remove('active'); 
                 addMessageToTimeline("Смена оптики: Профиль 'Стандарт' (комната).", "ai");
             }
 
-            // 3. Отправляем команду на Малинку
             if (room && room.localParticipant) {
                 const payload = JSON.stringify({ cmd: "set_mode", mode: currentMode });
                 const encoder = new TextEncoder();
@@ -731,28 +727,34 @@
                 alert("Нет связи с камерой!");
             }
 
-            // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
+            setTimeout(() => {
+                canvas.style.transition = "opacity 0.8s ease-in-out";
+                canvas.style.opacity = "0";
+                setTimeout(() => {
+                    canvas.style.display = "none";
+                    canvas.style.transform = "scale(1.0)";
+                }, 800);
+            }, 3500);
+        } // <--- ЗДЕСЬ ФУНКЦИЯ TOGGLE MODE ДОЛЖНА ЗАКАНЧИВАТЬСЯ
+
+        // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
         let isOperatorFocus = false;
 
         function toggleFocus() {
             const btn = document.getElementById('btn-focus');
-            
-            // 1. Замораживаем кадр (чтобы скрыть моргание камеры при перезапуске потока)
             const canvas = freezeVideo();
 
-            // 2. Переключаем состояние интерфейса
             isOperatorFocus = !isOperatorFocus;
             if (isOperatorFocus) {
                 btn.innerText = "[Фок] 65 см";
-                btn.classList.add('active'); // Подсвечиваем кнопку розовым
+                btn.classList.add('active'); 
                 addMessageToTimeline("Фокус: РУЧНОЙ (Зафиксирован на дистанции 65 см).", "ai");
             } else {
                 btn.innerText = "[Фок] Авто";
-                btn.classList.remove('active'); // Убираем подсветку
+                btn.classList.remove('active'); 
                 addMessageToTimeline("Фокус: АВТОМАТИКА (Поиск по кадру).", "ai");
             }
 
-            // 3. Отправляем команду на Малинку через LiveKit
             if (room && room.localParticipant) {
                 const payload = JSON.stringify({ cmd: "toggle_focus" });
                 const encoder = new TextEncoder();
@@ -761,7 +763,6 @@
                 alert("Нет связи с камерой!");
             }
 
-            // 4. Плавно растворяем замороженный холст через 3.5 секунды
             setTimeout(() => {
                 canvas.style.transition = "opacity 0.8s ease-in-out";
                 canvas.style.opacity = "0";
@@ -772,17 +773,6 @@
             }, 3500);
         }
 
-            // 4. Плавно растворяем замороженный холст через 3.5 секунды
-            // (К этому моменту Малинка уже запустит новый поток)
-            setTimeout(() => {
-                canvas.style.transition = "opacity 0.8s ease-in-out";
-                canvas.style.opacity = "0";
-                setTimeout(() => {
-                    canvas.style.display = "none";
-                    canvas.style.transform = "scale(1.0)";
-                }, 800);
-            }, 3500);
-        }
         // --- ЛОГИКА ПРИНУДИТЕЛЬНОЙ СИНХРОНИЗАЦИИ (СБРОС ЗАДЕРЖКИ) ---
         function resetStream() {
             addMessageToTimeline("Принудительная очистка буфера. Синхронизация потока...", "human");

@@ -739,16 +739,17 @@
 
         // --- ЛОГИКА ФОКУСА (АВТО / 65 СМ) ---
         // --- ЛОГИКА ФОКУСА (ЦИКЛ 60-90 СМ) ---
-        // --- ЛОГИКА ФОКУСА (МИКРОПОДСТРОЙКА 60-90 СМ) ---
         const FOCUS_STEPS = [
             { label: "Авто", mode: "auto", diopters: 0 },
+            { label: "Бесконечность", mode: "manual", diopters: 0.0 },
+            { label: "110 см", mode: "manual", diopters: 0.91 },
+            { label: "100 см", mode: "manual", diopters: 1.00 },
             { label: "90 см", mode: "manual", diopters: 1.11 },
-            { label: "85 см", mode: "manual", diopters: 1.18 },
             { label: "80 см", mode: "manual", diopters: 1.25 },
-            { label: "75 см", mode: "manual", diopters: 1.33 },
             { label: "70 см", mode: "manual", diopters: 1.43 },
-            { label: "65 см", mode: "manual", diopters: 1.54 },
-            { label: "60 см", mode: "manual", diopters: 1.67 }
+            { label: "60 см", mode: "manual", diopters: 1.67 },
+            { label: "40 см", mode: "manual", diopters: 2.50 }, // Для съемки деталей вблизи
+            { label: "Макро 15см", mode: "manual", diopters: 6.66 } // СТРЕСС-ТЕСТ (размоет всё дальнее)
         ];
         let focusIndex = 0;
 
